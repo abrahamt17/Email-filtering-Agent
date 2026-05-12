@@ -1,0 +1,69 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: email_db
+    environment:
+      POSTGRES_USER: email_user
+      POSTGRES_PASSWORD: secure_password
+      POSTGRES_DB: email_processing_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U email_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - email_network
+
+  # Redis Cache (Optional)
+  redis:
+    image: redis:7-alpine
+    container_name: email_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - email_network
+
+  # FastAPI Application
+  app:
+    build: .
+    container_name: email_app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://email_user:secure_password@postgres:5432/email_processing_db
+      REDIS_URL: redis://redis:6379/0
+      REDIS_ENABLED: "true"
+      ENVIRONMENT: production
+      DEBUG: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - email_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  email_network:
+    driver: bridge
