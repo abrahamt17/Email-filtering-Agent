@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.middleware.gzip import GZIPMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
@@ -73,7 +73,7 @@ def create_app() -> FastAPI:
 
     # Add middleware - order matters
     # 1. GZIP compression
-    app.add_middleware(GZIPMiddleware, minimum_size=1000)
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     # 2. Trusted host
     app.add_middleware(
