@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, status
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -43,7 +44,7 @@ async def health_check(db: AsyncSession = Depends(get_session)):
     db_status = False
     try:
         # Simple query to verify database connection
-        await db.execute("SELECT 1")
+        await db.execute(text("SELECT 1"))
         db_status = True
         logger.debug("Database connection check: OK")
     except Exception as e:
