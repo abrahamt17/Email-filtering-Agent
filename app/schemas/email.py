@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class EmailStatus(str, Enum):
@@ -28,7 +28,7 @@ class EmailBase(BaseModel):
 
 class EmailCreate(EmailBase):
     """Schema for creating emails."""
-    pass
+    ...
 
 
 class EmailUpdate(BaseModel):
@@ -48,8 +48,7 @@ class ProcessingLogResponse(BaseModel):
     duration_ms: Optional[int] = None
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EmailResponse(EmailBase):
@@ -62,10 +61,9 @@ class EmailResponse(EmailBase):
     processed_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-    logs: list[ProcessingLogResponse] = []
+    logs: list[ProcessingLogResponse] = Field(default_factory=list)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class EmailListResponse(BaseModel):
@@ -96,8 +94,7 @@ class UserResponse(UserBase):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Health Check

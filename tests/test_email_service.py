@@ -3,8 +3,8 @@ Unit tests for email service.
 """
 
 import pytest
-from datetime import datetime
-from app.models.models import Email, EmailStatus
+
+from app.models.models import EmailStatus
 from app.schemas.email import EmailCreate
 from app.services.email_service import EmailService
 
@@ -63,3 +63,58 @@ async def test_delete_email(db_session):
     deleted = await service.delete_email(created.id)
     
     assert deleted is True
+
+
+@pytest.mark.asyncio
+async def test_list_emails_counts_only_matching_status(db_session):
+    """Test that filtered email counts are correct."""
+    service = EmailService(db_session)
+
+    pending_email = EmailCreate(
+        subject="Pending Email",
+        sender="pending@example.com",
+        recipient="recipient@example.com",
+        body="Pending body",
+    )
+    completed_email = EmailCreate(
+        subject="Completed Email",
+        sender="completed@example.com",
+        recipient="recipient@example.com",
+        body="Completed body",
+    )
+
+    await service.create_email(pending_email)
+    completed = await service.create_email(completed_email)
+    completed.status = EmailStatus.COMPLETED
+    await db_session.flush()
+
+    emails, total = await service.get_emails(status=EmailStatus.PENDING)
+
+    assert total == 1
+    assert len(emails) == 1
+    assert emails[0].subject == "Pending Email"
+
+
+@pytest.mark.asyncio
+async def test_process_email_updates_fields_and_logs(db_session):
+    """Test that processing fills AI fields and creates a log row."""
+    service = EmailService(db_session)
+
+    email_data = EmailCreate(
+        subject="Process Me",
+        sender="sender@example.com",
+        recipient="recipient@example.com",
+        body="Process body",
+    )
+
+    created = await service.create_email(email_data)
+    processed = await service.process_email(created.id)
+
+    assert processed.status == EmailStatus.COMPLETED
+    assert processed.ai_summary == "Summary of: Process Me"
+    assert processed.ai_classification == "general"
+    assert processed.ai_sentiment == "neutral"
+    assert processed.processed_at is not None
+    assert len(processed.logs) == 1
+    assert processed.logs[0].step == "ai_analysis"
+    assert processed.logs[0].status == "success"

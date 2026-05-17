@@ -7,8 +7,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.models.models import Email, EmailStatus, ProcessingLog
 from app.schemas.email import EmailCreate, EmailUpdate
@@ -42,9 +43,15 @@ class EmailService:
         )
         self.db.add(db_email)
         await self.db.flush()
+
+        result = await self.db.execute(
+            select(Email)
+            .options(selectinload(Email.logs))
+            .where(Email.id == db_email.id)
+        )
         
         logger.info(f"Created email with ID: {db_email.id}")
-        return db_email
+        return result.scalar_one()
 
     async def get_email(self, email_id: int) -> Optional[Email]:
         """
@@ -57,7 +64,9 @@ class EmailService:
             Optional[Email]: Email object or None if not found
         """
         result = await self.db.execute(
-            select(Email).where(Email.id == email_id)
+            select(Email)
+            .options(selectinload(Email.logs))
+            .where(Email.id == email_id)
         )
         return result.scalar_one_or_none()
 
@@ -78,14 +87,16 @@ class EmailService:
         Returns:
             Tuple of (emails list, total count)
         """
-        query = select(Email)
-        
+        query = select(Email).options(selectinload(Email.logs))
+        count_query = select(func.count()).select_from(Email)
+
         if status:
             query = query.where(Email.status == status)
-        
-        # Get total count
-        count_result = await self.db.execute(select(Email))
-        total = len(count_result.scalars().all())
+            count_query = count_query.where(Email.status == status)
+
+        # Get total count without loading all rows
+        count_result = await self.db.execute(count_query)
+        total = count_result.scalar_one()
         
         # Get paginated results
         query = query.order_by(Email.created_at.desc()).offset(skip).limit(limit)
@@ -175,7 +186,7 @@ class EmailService:
             # Log processing step
             duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
             await self._log_processing_step(
-                email_id=email_id,
+                email=email,
                 step="ai_analysis",
                 status="success",
                 message="Email processed successfully",
@@ -189,7 +200,7 @@ class EmailService:
             duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
             
             await self._log_processing_step(
-                email_id=email_id,
+                email=email,
                 step="ai_analysis",
                 status="failed",
                 message=str(e),
@@ -200,11 +211,17 @@ class EmailService:
             raise
 
         await self.db.flush()
-        return email
+
+        result = await self.db.execute(
+            select(Email)
+            .options(selectinload(Email.logs))
+            .where(Email.id == email_id)
+        )
+        return result.scalar_one()
 
     async def _log_processing_step(
         self,
-        email_id: int,
+        email: Email,
         step: str,
         status: str,
         message: Optional[str] = None,
@@ -214,18 +231,19 @@ class EmailService:
         Log a processing step.
         
         Args:
-            email_id: Email ID
+            email: Loaded Email object
             step: Processing step name
             status: Step status (success/failed)
             message: Optional message
             duration_ms: Optional duration in milliseconds
         """
         log = ProcessingLog(
-            email_id=email_id,
+            email_id=email.id,
             step=step,
             status=status,
             message=message,
             duration_ms=duration_ms,
         )
+        email.logs.append(log)
         self.db.add(log)
         await self.db.flush()
