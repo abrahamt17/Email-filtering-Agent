@@ -1,0 +1,8 @@
+#!/bin/sh
+'''exec' "/home/avram/Documents/projects/2026/NEW/AI email int sys/.venv3.11/bin/python3.11" "$0" "$@"
+' '''
+import sys
+from pyflakes.api import main
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(main())
